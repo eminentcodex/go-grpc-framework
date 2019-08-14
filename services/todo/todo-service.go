@@ -3,7 +3,6 @@ package todo
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -12,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 	"grpoc/models"
 	"grpoc/modules"
+	mymodel "grpoc/modules/model"
 )
 
 const (
@@ -90,49 +90,26 @@ func (s *toDoServiceServer) Create(ctx context.Context, req *CreateRequest) (*Cr
 
 // Read todo task
 func (s *toDoServiceServer) Read(ctx context.Context, req *ReadRequest) (*ReadResponse, error) {
+	var (
+		todoModel, _ = models.NewToDo(ctx, s.db)
+		td           ToDo
+	)
 	// check if the API version requested by client is supported by server
 	if err := s.checkAPI(req.Api); err != nil {
 		return nil, err
 	}
 
-	// get SQL connection from pool
-	c, err := s.connect(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer c.Close()
-
 	// query ToDo by ID
-	rows, err := c.QueryContext(ctx, "SELECT `ID`, `Title`, `Description`, `Reminder` FROM ToDo WHERE `ID`=?",
-		req.Id)
+	todo, err := todoModel.GetTodoByID(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.Unknown, "failed to select from ToDo-> "+err.Error())
 	}
-	defer rows.Close()
 
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return nil, status.Error(codes.Unknown, "failed to retrieve data from ToDo-> "+err.Error())
-		}
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("ToDo with ID='%d' is not found",
-			req.Id))
-	}
-
-	// get ToDo data
-	var td ToDo
-	var reminder time.Time
-	if err := rows.Scan(&td.Id, &td.Title, &td.Description, &reminder); err != nil {
-		return nil, status.Error(codes.Unknown, "failed to retrieve field values from ToDo row-> "+err.Error())
-	}
-	td.Reminder, err = ptypes.TimestampProto(reminder)
-	if err != nil {
-		return nil, status.Error(codes.Unknown, "reminder field has invalid format-> "+err.Error())
-	}
-
-	if rows.Next() {
-		return nil, status.Error(codes.Unknown, fmt.Sprintf("found multiple ToDo rows with ID='%d'",
-			req.Id))
-	}
+	td.Id = todo.ID
+	td.Description = todo.Description
+	td.Title = todo.Title
+	rem, _ := time.Parse(mymodel.SQLDatetime, todo.Reminder)
+	td.Reminder, _ = ptypes.TimestampProto(rem)
 
 	return &ReadResponse{
 		Api:  apiVersion,

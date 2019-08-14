@@ -142,7 +142,7 @@ func (m *Model) Select(dest interface{}, conditions Conditions) (err error) {
 		columns, order   []string
 	)
 
-	columns = m.getColumns(dest)
+	columns, _ = m.getQueryDetail(m)
 	sql = fmt.Sprintf("SELECT %s FROM %s", strings.Join(columns, ","), m.TableName)
 
 	if whereClause, args, err = m.getWhereClause(conditions); err != nil {
@@ -175,41 +175,27 @@ func (m *Model) SelectComplex(dest interface{}) {
 
 }
 
-// Insert - To insert single or multiple records
-func (m *Model) Insert(insertSet []map[string]interface{}) (res sql.Result, err error) {
+// Insert - To insert single record
+func (m *Model) Insert(insertSet interface{}) (res sql.Result, err error) {
 	var (
 		rows, args   []interface{}
-		tRecCount    int
 		columns, val []string
 		sql, query   string
 	)
 
-	tRecCount = len(insertSet)
-
-	if tRecCount == 0 {
-		err = errors.New(NoInsertRecordProvided)
-		return
-	}
-
 	// prepare values place holders
-	for _, r := range insertSet {
-		rows = append(rows, r)
-		val = append(val, "(?)")
+	// get all the values
+	for _, v := range r {
+		ins = append(ins, v)
 	}
+	rows = append(rows, ins)
+	val = append(val, "(?)")
+	ins = nil
 
-	// fetch columns
-	for c, _ := range insertSet[0] {
-		columns = append(columns, c)
-	}
+	columns, args = m.getQueryDetail(insertSet)
 
 	sql = fmt.Sprintf("INSERT INTO %s (%s) VALUES %s", m.TableName, strings.Join(columns, ","), strings.Join(val, ","))
-
-	query, args, err = sqlx.In(sql, rows...)
-	if err != nil {
-		return
-	}
-
-	res, err = m.DB.Exec(query, args)
+	res, err = m.DB.Exec(query, args...)
 
 	return
 }
@@ -273,8 +259,8 @@ func (m *Model) getWhereClause(conditions Conditions) (cond string, args []inter
 			args = append(args, c.Value)
 			break
 		case OperatorIN:
-			v := reflect.ValueOf(c.Value).Type().Kind().String()
-			if v != "slice" {
+			v := reflect.ValueOf(c.Value).Type().Kind()
+			if v != reflect.Slice {
 				err = errors.New(InvalidINClauseValue)
 				return
 			}
@@ -315,16 +301,22 @@ func (m *Model) getWhereClause(conditions Conditions) (cond string, args []inter
 	return
 }
 
-// getColumns ...
-func (m *Model) getColumns(dest interface{}) (columns []string) {
+func (m *Model) prepareQuery() (columns []string, ) {
+	return
+}
+
+// getQueryDetail ...
+func (m *Model) getQueryDetail(dest interface{}) (columns []string, args []interface{}) {
 
 	v := reflect.ValueOf(dest).Elem()
 
 	for i := 0; i < v.NumField(); i++ {
 		f := v.Type().Field(i)
+		val := v.Type().Field(i).V
 		dbColumn := f.Tag.Get(DBTag)
-		if dbColumn != "" {
+		if dbColumn != "" || dbColumn != "-" {
 			columns = append(columns, dbColumn)
+			args = append(colum)
 		}
 	}
 

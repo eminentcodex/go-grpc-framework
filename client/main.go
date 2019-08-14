@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc"
+	mymodel "grpoc/modules/model"
 	"grpoc/services/todo"
 )
 
@@ -24,7 +25,7 @@ func main() {
 
 	t := time.Now().In(time.UTC)
 	reminder, _ := ptypes.TimestampProto(t)
-	pfx := t.Format(time.RFC3339Nano)
+	pfx := t.Format(mymodel.SQLDatetime)
 
 	reqCreate := todo.CreateRequest{
 		Api: "v1",
@@ -40,4 +41,15 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("Response:", resCreate)
+
+	reqAdd := todo.ReadRequest{
+		Api: "v1",
+		Id:  2,
+	}
+
+	resRead, err := c.Read(ctx, &reqAdd)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Response:", resRead)
 }
